@@ -1,0 +1,20 @@
+{
+  "name": "gmpc-backend",
+  "version": "1.0.0",
+  "description": "gMPC backend with E2E encryption and login",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "uuid": "^9.0.1"
+  }
+}

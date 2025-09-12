@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+gmpc-backend/node_modules/
+gmpc-frontend/node_modules/
+
+# Build output
+dist/
+gmpc-frontend/dist/
+
+# Local database (not needed in prod)
+gmpc-backend/data.json
+
+# Logs
+*.log
