@@ -2,11 +2,17 @@ import React, { useState, useEffect, useRef } from "react";
 import nacl from "tweetnacl";
 import naclUtil from "tweetnacl-util";
 
-// 🔑 API base URL
-// - When running locally, set API = "http://localhost:4000"
-// - When deployed with backend + frontend on same server, leave API = ""
-const API = "";
 
+
+
+// 🔑 API base URL
+// Replace this with your deployed backend API URL
+// 🔑 API base URL
+const API_URL = import.meta.env.VITE_API_URL;
+
+
+
+ 
 export default function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,76 +43,55 @@ export default function App() {
   // ----------------------
 
   const signup = async () => {
-    if (!username.trim() || !password.trim())
-      return alert("Enter username & password!");
+  if (!username.trim() || !password.trim())
+    return alert("Enter username & password!");
 
-    // Check if keypair already exists
-    let privKey = localStorage.getItem("privateKey");
-    let pubKey = localStorage.getItem("publicKey");
+  // Generate key pair
+  const keyPair = nacl.box.keyPair();
+  const pubKey = naclUtil.encodeBase64(keyPair.publicKey);
+  const privKey = naclUtil.encodeBase64(keyPair.secretKey);
 
-    if (!privKey || !pubKey) {
-      // Generate key pair only once
-      const keyPair = nacl.box.keyPair();
-      pubKey = naclUtil.encodeBase64(keyPair.publicKey);
-      privKey = naclUtil.encodeBase64(keyPair.secretKey);
+  localStorage.setItem("publicKey", pubKey);
 
-      localStorage.setItem("privateKey", privKey);
-      localStorage.setItem("publicKey", pubKey);
-    }
+  try {
+    const res = await fetch(`${API_URL}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, publicKey: pubKey, privateKey: privKey }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) return alert(data.error || "Signup failed");
 
+    localStorage.setItem("privateKey", privKey);
     setPublicKey(pubKey);
+    setLoggedIn(true);
+  } catch (err) {
+    alert("Error signing up: " + err.message);
+  }
+};
 
-    try {
-      const res = await fetch(`${API}/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, publicKey: pubKey }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        alert(data.error || "Signup failed");
-        return;
-      }
-      setLoggedIn(true);
-      alert(
-        `Welcome to CipherChat, ${username}!\n\n🔑 Your messages are end-to-end encrypted.\n\n📌 How it works:\n- Each account has a permanent cryptographic keypair.\n- Messages are encrypted with the recipient’s public key.\n- Only the recipient can decrypt with their private key.\n\n⚠️ Don’t clear your browser storage, or you’ll lose your private key and won’t be able to read old messages.`
-      );
-    } catch (err) {
-      alert("Error signing up: " + err.message);
-    }
-  };
 
   const login = async () => {
-    if (!username.trim() || !password.trim())
-      return alert("Enter username & password!");
-    try {
-      const res = await fetch(`${API}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        return alert(data.error || "Login failed");
-      }
+  if (!username.trim() || !password.trim())
+    return alert("Enter username & password!");
+  try {
+    const res = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) return alert(data.error || "Login failed");
 
-      // Restore keys from localStorage
-      let privKey = localStorage.getItem("privateKey");
-      let pubKey = localStorage.getItem("publicKey");
+    localStorage.setItem("publicKey", data.publicKey);
+    localStorage.setItem("privateKey", data.privateKey); // decrypted from backend
+    setPublicKey(data.publicKey);
+    setLoggedIn(true);
+  } catch (err) {
+    alert("Error logging in: " + err.message);
+  }
+};
 
-      if (!privKey || !pubKey) {
-        alert(
-          "No stored keys found. Please sign up again to generate a keypair."
-        );
-        return;
-      }
-
-      setPublicKey(pubKey);
-      setLoggedIn(true);
-    } catch (err) {
-      alert("Error logging in: " + err.message);
-    }
-  };
 
   const logout = () => {
     setLoggedIn(false);
@@ -122,7 +107,7 @@ export default function App() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API}/users`);
+      const res = await fetch(`${API_URL}/users`);
       const data = await res.json();
       setUsers(data);
     } catch (err) {
@@ -133,7 +118,7 @@ export default function App() {
   const fetchMessages = async (user) => {
     if (!user) return;
     try {
-      const res = await fetch(`${API}/messages?username=${user}`);
+      const res = await fetch(`${API_URL}/messages?username=${user}`);
       const data = await res.json();
       const privKeyBase64 = localStorage.getItem("privateKey");
       if (!privKeyBase64) return;
@@ -170,7 +155,7 @@ export default function App() {
     try {
       const encryptedMessages = await Promise.all(
         recipients.map(async (recipient) => {
-          const resKey = await fetch(`${API}/publicKey?username=${recipient}`);
+          const resKey = await fetch(`${API_URL}/publicKey?username=${recipient}`);
           if (!resKey.ok) throw new Error(`Recipient ${recipient} not found`);
           const dataKey = await resKey.json();
           const recipientPubKey = naclUtil.decodeBase64(dataKey.publicKey);
@@ -192,7 +177,7 @@ export default function App() {
         })
       );
 
-      const resSend = await fetch(`${API}/send`, {
+      const resSend = await fetch(`${API_URL}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sender: username, encryptedMessages }),
@@ -215,7 +200,7 @@ export default function App() {
 
   const resetFeed = async () => {
     try {
-      const res = await fetch(`${API}/reset`, { method: "POST" });
+      const res = await fetch(`${API_URL}/reset`, { method: "POST" });
       if (!res.ok) throw new Error("Reset failed");
       setMessages([]);
     } catch (err) {
@@ -230,6 +215,7 @@ export default function App() {
   if (!loggedIn) {
     return (
       <div style={styles.page}>
+      
         <header style={styles.header}>
           <img src="/arcium.jpg" alt="Arcium Logo" style={styles.logo} />
           <h1 style={styles.title}>CipherChat</h1>

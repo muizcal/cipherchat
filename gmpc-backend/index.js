@@ -75,7 +75,7 @@ function decryptPrivateKey(encString, password) {
 // Express setup
 // ----------------------
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 // ----------------------
